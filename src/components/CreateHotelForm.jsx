@@ -15,60 +15,81 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useCreateHotelMutation } from "@/lib/api";
+import { Checkbox } from "./ui/checkbox";
+import { useState } from "react";
+import { useAuth } from "@clerk/clerk-react";
 
 const formSchema = z.object({
   name: z.string().min(1, { message: "Hotel name is required" }),
   location: z.string().min(1),
-  image: z.string().min(1),
-  price: z.number(),
+  image: z.instanceof(File).optional(),
+  price: z.preprocess((val) => Number(val) || 0, z.number().min(1, "Price must be greater than zero")),
   description: z.string().min(1),
   province: z.string().optional(),
-  gym: z.boolean().optional(),
-  spa:z.boolean().optional(),
-  restaurent:z.boolean().optional(),
-  laundry: z.boolean().optional(),
-  bikeRental:z.boolean().optional(),
-  freeWifi:z.boolean().optional(),
-  movieNight:z.boolean().optional(),
-  swimmingPool:z.boolean().optional(),
-  coffeeShop:z.boolean().optional()
-
-
+  gym: z.boolean().default(false),
+  spa: z.boolean().default(false),
+  bar: z.boolean().default(false),
+  restaurent: z.boolean().default(false),
+  laundry: z.boolean().default(false),
+  bikeRental: z.boolean().default(false),
+  freeWifi: z.boolean().default(false),
+  movieNight: z.boolean().default(false),
+  swimmingPool: z.boolean().default(false),
+  coffeeShop: z.boolean().default(false),
 });
 
 const CreateHotelForm = () => {
   const [createHotel, { isLoading }] = useCreateHotelMutation();
   const form = useForm({
     resolver: zodResolver(formSchema),
+    defaultValues: {
+      name: "",
+      location: "",
+      image: null,
+      price:  0,
+      description: "",
+      province: "",
+      gym: false,
+      spa: false,
+      bar: false,
+      restaurent: false,
+      laundry: false,
+      bikeRental: false,
+      freeWifi: false,
+      movieNight: false,
+      swimmingPool: false,
+      coffeeShop: false,
+    },
   });
 
-  const handleSubmit = async (values) => {
-    const { name, location, image, price, description,province,gym,spa,restaurent,
-      laundry,
-      bikeRental ,
-      freeWifi ,
-      movieNight ,
-      swimmingPool ,
-      coffeeShop } = values;
+  const [selectedImage, setSelectedImage] = useState(null);
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setSelectedImage(URL.createObjectURL(file));  
+      form.setValue("image", file);
+    }
+  };
+
+  const handleSubmit = async (values, event) => {
+    event.preventDefault();  
+    const formData = new FormData();
+
+    Object.keys(values).forEach((key) => {
+      if (key === "image" && values.image instanceof File) {
+        formData.append(key, values.image);
+      } else {
+        formData.append(key, values[key]);
+      }
+    });
+
     try {
       toast.loading("Creating hotel...");
-      await createHotel({
-        name,
-        location,
-        image,
-        price,
-        description,
-        province,
-        gym,
-        spa,restaurent,
-      laundry,
-      bikeRental ,
-      freeWifi ,
-      movieNight ,
-      swimmingPool ,
-      coffeeShop 
-      }).unwrap();
+      await createHotel(formData).unwrap();
       toast.success("Hotel created successfully");
+      form.reset();
+      setSelectedImage(null);
     } catch (error) {
       toast.error("Hotel creation failed");
     }
@@ -107,36 +128,41 @@ const CreateHotelForm = () => {
           <FormField
             control={form.control}
             name="image"
-            render={({ field }) => (
+            render={() => (
               <FormItem>
                 <FormLabel>Image</FormLabel>
                 <FormControl>
-                  <Input placeholder="Image" {...field} />
+                  <Input type="file" accept="image/*" onChange={handleImageChange} />
                 </FormControl>
+                {selectedImage && (
+                  <img src={selectedImage} alt="Selected" className="mt-2 w-32 h-32 object-cover rounded" />
+                )}
                 <FormMessage />
               </FormItem>
             )}
           />
           <FormField
-            control={form.control}
-            name="price"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Price</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    placeholder="Price"
-                    onChange={(e) => {
-                      field.onChange(parseFloat(e.target.value));
-                    }}
-                    value={field.value}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+  control={form.control}
+  name="price"
+  render={({ field }) => (
+    <FormItem>
+      <FormLabel>Price</FormLabel>
+      <FormControl>
+        <Input
+          type="number"
+          placeholder="Price"
+          onChange={(e) => {
+            const value = e.target.value;
+            field.onChange(value ? parseFloat(value) : "");
+          }}
+          value={field.value || ""}
+        />
+      </FormControl>
+      <FormMessage />
+    </FormItem>
+  )}
+/>
+
           <FormField
             control={form.control}
             name="description"
@@ -151,27 +177,42 @@ const CreateHotelForm = () => {
             )}
           />
           <div>
-            <FormLabel>Choose Amentities</FormLabel>
-            <FormDescription>Choose Amentities popular in your hotel</FormDescription>
-            <div className="grid grid-cols-2 gap-4 mt-2"></div>
-            <FormField
-              control={form.control}
-              name="Gym"
-              render={({ field }) => (
-                <FormItem>
-                   
-                  <FormControl>
-                     
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <FormLabel>Choose Amenities</FormLabel>
+            <FormDescription>Select amenities available at your hotel.</FormDescription>
+            <div className="grid grid-cols-2 gap-4 mt-2">
+              {[
+                "gym",
+                "spa",
+                "bar",
+                "restaurent",
+                "laundry",
+                "bikeRental",
+                "freeWifi",
+                "movieNight",
+                "swimmingPool",
+                "coffeeShop",
+              ].map((amenity) => (
+                <FormField
+                  key={amenity}
+                  control={form.control}
+                  name={amenity}
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center space-x-3 rounded-md border p-4">
+                      <FormControl>
+                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                      <FormLabel className="capitalize">{amenity.replace(/([A-Z])/g, ' $1')}</FormLabel>
+                    </FormItem>
+                  )}
+                />
+              ))}
+            </div>
           </div>
         </div>
-
         <div className="mt-4">
-          <Button type="submit">Create Hotel</Button>
+          <Button type="submit" disabled={isLoading}>
+            {isLoading ? "Creating..." : "Create Hotel"}
+          </Button>
         </div>
       </form>
     </Form>

@@ -1,6 +1,7 @@
 import Navigation from "./components/Navigation";
 import Hero from "./components/Hero";
 import HotelListings from "./components/HotelListings";
+import { UploadButton, UploadDropzone } from "./uploadthing";
 
 const App = () => {
 
